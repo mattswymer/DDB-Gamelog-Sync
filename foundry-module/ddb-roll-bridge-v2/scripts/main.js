@@ -9,6 +9,7 @@ let eventSource = null;
 let bridgeState = "disconnected";
 let bridgeError = "";
 let settingsApp = null;
+let lastNotifiedAuthError = "";
 
 function log(...args) {
   try { if (game.settings.get(MODULE_ID, "debugLogging")) console.debug(`[${MODULE_ID}]`, ...args); }
@@ -151,6 +152,7 @@ async function postRoll(roll) {
 }
 
 function processRawMessage(raw) {
+  if (setting("debugLogging")) console.debug(`[${MODULE_ID}] Raw fulfilled event`, raw);
   const normalized = normalizeMessage(raw);
   if (!normalized) return;
   postRoll(normalized).catch(error => {
@@ -181,6 +183,10 @@ function startEventStream() {
       const status = JSON.parse(event.data);
       bridgeState = status.state || "unknown";
       bridgeError = status.lastError || "";
+      if (bridgeError && /authentication failed|cobaltsession|token exchange/i.test(bridgeError) && bridgeError !== lastNotifiedAuthError) {
+        lastNotifiedAuthError = bridgeError;
+        ui.notifications?.warn?.(`DDB Roll Bridge: ${bridgeError}`);
+      }
       updateBridgeButton();
       settingsApp?.render({ force: true });
       log("Transport status", status);
@@ -504,6 +510,7 @@ Hooks.once("ready", async () => {
   } catch (error) {
     bridgeState = "error";
     bridgeError = error.message;
+    ui.notifications?.warn?.(`DDB Roll Bridge: ${error.message}`);
     log("Automatic connection failed", error.message);
   }
 });
