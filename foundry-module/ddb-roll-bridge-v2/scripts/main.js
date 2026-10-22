@@ -91,6 +91,8 @@ async function postRoll(roll) {
   // Only the active GM creates chat messages; this remains true if another GM connects manually.
   if (!game.user?.isGM || game.users.activeGM?.id !== game.user.id) return;
   if (!rememberEvent(roll.id)) return;
+  const nextSeen = Math.max(Number(setting("lastSeenTimestamp") || 0), Number(roll.timestamp) || Date.now());
+  void game.settings.set(MODULE_ID, "lastSeenTimestamp", nextSeen);
   const actor = resolveActor(roll);
   const speaker = actor
     ? ChatMessage.getSpeaker({ actor })
@@ -172,10 +174,25 @@ function startEventStream() {
       log("Transport status", status);
     } catch {}
   });
-  eventSource.onerror = () => {
-    bridgeState = "reconnecting";
-    updateBridgeButton();
-  };
+  return new Promise((resolve, reject) => {
+    let opened = false;
+    const timeout = setTimeout(() => {
+      if (!opened) reject(new Error("Could not open the local bridge event stream. Check the bridge URL and access token."));
+    }, 8000);
+    eventSource.addEventListener("open", () => {
+      opened = true;
+      clearTimeout(timeout);
+      resolve();
+    }, { once: true });
+    eventSource.onerror = () => {
+      bridgeState = "reconnecting";
+      updateBridgeButton();
+      if (!opened) {
+        clearTimeout(timeout);
+        reject(new Error("The local bridge event stream failed before connecting."));
+      }
+    };
+  });
 }
 
 function updateBridgeButton() {
@@ -196,13 +213,17 @@ async function connectBridge({ cobaltSession, gameId, skipBeyond20 }) {
     method: "POST",
     body: JSON.stringify({ cobaltSession, gameId, skipBeyond20 })
   });
-  await bridgeRequest("/start", { method: "POST", body: "{}" });
+  // Open the event stream before starting capture so REST catch-up events cannot be missed.
+  await startEventStream();
+  await bridgeRequest("/start", {
+    method: "POST",
+    body: JSON.stringify({ sinceTimestamp: Number(setting("lastSeenTimestamp") || 0) })
+  });
 
   await game.settings.set(MODULE_ID, "campaignId", String(gameId));
   await game.settings.set(MODULE_ID, "gameId", String(gameId));
   if (configured.userId) await game.settings.set(MODULE_ID, "userId", String(configured.userId));
   await game.settings.set(MODULE_ID, "skipBeyond20", !!skipBeyond20);
-  startEventStream();
   bridgeState = "connecting";
   updateBridgeButton();
   ui.notifications?.info?.("DDB Roll Bridge connected. Waiting for new fulfilled rolls.");
@@ -424,6 +445,10 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, "processedEventIds", {
     name: "Processed D&D Beyond event IDs",
     scope: "client", config: false, type: Array, default: []
+  });
+  game.settings.register(MODULE_ID, "lastSeenTimestamp", {
+    name: "Last seen D&D Beyond timestamp",
+    scope: "client", config: false, type: Number, default: 0
   });
   game.settings.register(MODULE_ID, "debugLogging", {
     name: "Debug logging", scope: "client", config: false, type: Boolean, default: false
