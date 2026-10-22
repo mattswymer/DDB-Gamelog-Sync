@@ -151,3 +151,24 @@ test("inherits event-level operation codes for nested roll entries", () => {
   assert.equal(normalized.rolls[0].rollKind, "disadvantage");
   assert.equal(normalized.rolls[0].formula, "2d20kl + 2");
 });
+ 
+test("disadvantage keeps the lower recorded d20 and does not roll again", () => {
+  class MockDie { constructor(data) { Object.assign(this, data); } }
+  class MockOperatorTerm { constructor(data) { Object.assign(this, data); } }
+  class MockNumericTerm { constructor(data) { Object.assign(this, data); } }
+  globalThis.foundry = { dice: { terms: { Die: MockDie, OperatorTerm: MockOperatorTerm, NumericTerm: MockNumericTerm } } };
+  globalThis.Roll = { fromTerms: terms => ({ terms }) };
+  try {
+    const roll = buildRecordedRoll({
+      diceNotation: { constant: 4, set: [{ count: 2, dieType: "d20" }] },
+      values: [3, 18],
+      total: 7,
+      rollKind: "disadvantage"
+    });
+    assert.deepEqual(roll.terms[0].results.map(value => value.active), [true, false]);
+    assert.deepEqual(roll.terms[0].modifiers, ["kl"]);
+  } finally {
+    delete globalThis.foundry;
+    delete globalThis.Roll;
+  }
+});
