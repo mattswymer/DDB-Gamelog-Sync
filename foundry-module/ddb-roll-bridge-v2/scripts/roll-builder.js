@@ -9,8 +9,9 @@ function facesFromType(type) {
 
 function advantageSelection(roll) {
   const kind = String(roll.rollKind || "").toLowerCase();
-  if (kind.includes("advantage")) return "high";
+  // Check disadvantage first: "disadvantage" contains the word "advantage".
   if (kind.includes("disadvantage")) return "low";
+  if (kind.includes("advantage")) return "high";
   return null;
 }
 
