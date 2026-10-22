@@ -1,0 +1,46 @@
+name: Direct bridge build and tests
+
+on:
+  push:
+    branches:
+      - main
+      - direct-bridge-v2-no-npm
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install bridge dependencies
+        working-directory: direct-bridge
+        run: npm install
+      - name: Run parser tests
+        working-directory: direct-bridge
+        run: npm test
+      - name: Build standalone Windows executable
+        working-directory: direct-bridge
+        run: npm run build
+      - name: Package Foundry module
+        shell: pwsh
+        run: |
+          Compress-Archive -Path foundry-module/ddb-direct-roll-bridge -DestinationPath direct-bridge/dist/ddb-direct-roll-bridge.zip -Force
+      - name: Upload installable artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: ddb-gamelog-sync-windows-and-foundry-module
+          path: |
+            direct-bridge/dist/DDB-Gamelog-Sync.exe
+            direct-bridge/dist/ddb-direct-roll-bridge.zip
+          if-no-files-found: error
