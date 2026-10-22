@@ -49,13 +49,16 @@ export function normalizeMessage(message) {
   const rolls = (Array.isArray(data.rolls) ? data.rolls : []).map((roll, index) => {
     const result = roll?.result ?? {};
     const values = Array.isArray(result.values) ? result.values.map(Number).filter(Number.isFinite) : [];
+    const operation = Number(roll?.operation ?? data.operation) || 0;
+    const rollKind = String(roll?.rollKind ?? data.rollKind ?? (operation === 2 ? "advantage" : operation === 1 ? "disadvantage" : ""));
+    const normalizedRoll = { ...roll, operation, rollKind };
     return {
       index,
       rollType: String(roll?.rollType ?? "roll"),
-      rollKind: String(roll?.rollKind ?? (Number(roll?.operation) === 2 ? "advantage" : Number(roll?.operation) === 1 ? "disadvantage" : "")),
-      operation: Number(roll?.operation) || 0,
-      category: classifyRoll(roll, action),
-      formula: rollNotation(roll),
+      rollKind,
+      operation,
+      category: classifyRoll(normalizedRoll, action),
+      formula: rollNotation(normalizedRoll),
       total: result.total !== null && result.total !== undefined && Number.isFinite(Number(result.total)) ? Number(result.total) : null,
       breakdown: String(result.text ?? ""),
       values,
