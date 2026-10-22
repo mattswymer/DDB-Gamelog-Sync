@@ -34,6 +34,7 @@ export function buildRecordedRoll(rollData) {
     const die = new foundry.dice.terms.Die({
       number: count,
       faces,
+      modifiers: selection && count > 1 ? [selection === "high" ? "kh" : "kl"] : [],
       results: dieValues.map(result => ({ result, active: chosen === null || result === chosen }))
     });
     die._evaluated = true;
