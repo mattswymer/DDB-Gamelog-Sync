@@ -34,6 +34,7 @@ jobs:
           node --check direct-bridge/server.js
           node --check foundry-module/ddb-roll-bridge-v2/scripts/main.js
           node --check foundry-module/ddb-roll-bridge-v2/scripts/roll-parser.js
+          node --check foundry-module/ddb-roll-bridge-v2/scripts/roll-builder.js
       - name: Build standalone Windows executable
         working-directory: direct-bridge
         run: npm run build
