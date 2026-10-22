@@ -62,3 +62,51 @@ test("ignores non-fulfilled and malformed events", () => {
   const missingTotal = normalizeMessage({ id: "no-total", eventType: "dice/roll/fulfilled", data: { rolls: [{ rollType: "check" }] } });
   assert.equal(missingTotal.rolls[0].total, null);
 });
+
+import { buildRecordedRoll } from "../foundry-module/ddb-roll-bridge-v2/scripts/roll-builder.js";
+
+test("builds a native Roll from recorded values without evaluating or rerolling", () => {
+  class MockDie {
+    constructor(data) { Object.assign(this, data); this._evaluated = false; }
+  }
+  class MockOperatorTerm { constructor(data) { Object.assign(this, data); } }
+  class MockNumericTerm { constructor(data) { Object.assign(this, data); } }
+  globalThis.foundry = { dice: { terms: { Die: MockDie, OperatorTerm: MockOperatorTerm, NumericTerm: MockNumericTerm } } };
+  globalThis.Roll = { fromTerms: terms => ({ terms, _total: null, _evaluated: false }) };
+  try {
+    const roll = buildRecordedRoll({
+      diceNotation: { constant: 5, set: [{ count: 1, dieType: "d20" }] },
+      values: [17],
+      total: 22,
+      rollKind: ""
+    });
+    assert.equal(roll._total, 22);
+    assert.equal(roll._evaluated, true);
+    assert.equal(roll.terms[0].results[0].result, 17);
+    assert.equal(roll.terms[0].results[0].active, true);
+    assert.equal(roll.terms[0]._evaluated, true);
+  } finally {
+    delete globalThis.foundry;
+    delete globalThis.Roll;
+  }
+});
+
+test("advantage keeps the higher recorded d20 and does not roll again", () => {
+  class MockDie { constructor(data) { Object.assign(this, data); } }
+  class MockOperatorTerm { constructor(data) { Object.assign(this, data); } }
+  class MockNumericTerm { constructor(data) { Object.assign(this, data); } }
+  globalThis.foundry = { dice: { terms: { Die: MockDie, OperatorTerm: MockOperatorTerm, NumericTerm: MockNumericTerm } } };
+  globalThis.Roll = { fromTerms: terms => ({ terms }) };
+  try {
+    const roll = buildRecordedRoll({
+      diceNotation: { constant: 4, set: [{ count: 2, dieType: "d20" }] },
+      values: [3, 18],
+      total: 22,
+      rollKind: "advantage"
+    });
+    assert.deepEqual(roll.terms[0].results.map(value => value.active), [false, true]);
+  } finally {
+    delete globalThis.foundry;
+    delete globalThis.Roll;
+  }
+});
