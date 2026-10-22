@@ -22,8 +22,9 @@ export function rollNotation(roll = {}) {
   }
   const kind = String(roll.rollKind ?? "").toLowerCase();
   const operation = Number(roll.operation);
-  const keep = kind.includes("advantage") || operation === 2 ? "kh"
-    : kind.includes("disadvantage") || operation === 1 ? "kl" : "";
+  // Check disadvantage first: "disadvantage" contains the word "advantage".
+  const keep = kind.includes("disadvantage") || operation === 1 ? "kl"
+    : kind.includes("advantage") || operation === 2 ? "kh" : "";
   if (keep) formula = formula.replace(/2d20(?![a-z])/i, `2d20${keep}`);
   return formula;
 }
