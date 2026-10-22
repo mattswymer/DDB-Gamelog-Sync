@@ -4,6 +4,7 @@ import { buildRecordedRoll } from "./roll-builder.js";
 const MODULE_ID = "ddb-roll-bridge-v2";
 const MAX_SEEN_EVENTS = 1000;
 const seenEvents = new Set();
+const mappingPrompted = new Set();
 let eventSource = null;
 let bridgeState = "disconnected";
 let bridgeError = "";
@@ -53,6 +54,9 @@ function rememberEvent(id) {
 }
 
 function resolveActor(roll) {
+  const actors = game.actors?.contents || [];
+  const flagged = actors.find(actor => String(actor.getFlag("ddb-gamelog-sync", "ddbId") || "") === String(roll.entityId || ""));
+  if (flagged) return flagged;
   const mappings = setting("actorMappings") || {};
   const mappedId = mappings[String(roll.entityId)];
   if (mappedId) {
@@ -137,6 +141,10 @@ async function postRoll(roll) {
   await ChatMessage.create(messageData);
   log("Mirrored fulfilled roll", { id: roll.id, rollId: roll.rollId, character: roll.character, action: roll.action });
   Hooks.callAll("ddbGamelogSync.roll", roll);
+  if (!actor && roll.entityId && !mappingPrompted.has(String(roll.entityId))) {
+    mappingPrompted.add(String(roll.entityId));
+    void openMappingDialog();
+  }
 }
 
 function processRawMessage(raw) {
@@ -373,7 +381,11 @@ async function openMappingDialog() {
           const nextActors = {};
           const nextUsers = { ...userMappings };
           root.querySelectorAll("select[data-ddb-id]").forEach(select => {
-            if (select.value) nextActors[select.dataset.ddbId] = select.value;
+            if (select.value) {
+              nextActors[select.dataset.ddbId] = select.value;
+              const actor = game.actors.get(select.value);
+              if (actor) void actor.setFlag("ddb-gamelog-sync", "ddbId", String(select.dataset.ddbId));
+            }
           });
           root.querySelectorAll("select[data-ddb-user-id]").forEach(select => {
             const ddbUserId = select.dataset.ddbUserId;
