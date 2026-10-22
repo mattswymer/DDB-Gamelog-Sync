@@ -5,9 +5,11 @@ function dieFaces(type) {
 
 function termDie(type, values, rollKind) {
   const faces = dieFaces(type);
-  const results = values.map((result, index) => ({
+  const chosen = rollKind === "advantage" ? Math.max(...values)
+    : rollKind === "disadvantage" ? Math.min(...values) : null;
+  const results = values.map(result => ({
     result,
-    active: !(rollKind === "advantage" && index === 0) && !(rollKind === "disadvantage" && index === 1)
+    active: chosen === null || result === chosen
   }));
   const die = new foundry.dice.terms.Die({ number: values.length, faces });
   die.results = results;
