@@ -1,10 +1,13 @@
 import { normalizeMessage } from "./roll-parser.js";
+import { buildRecordedRoll } from "./roll-builder.js";
 
 const MODULE_ID = "ddb-roll-bridge-v2";
 const MAX_SEEN_EVENTS = 1000;
 const seenEvents = new Set();
 let eventSource = null;
 let bridgeState = "disconnected";
+let bridgeError = "";
+let settingsApp = null;
 
 function log(...args) {
   console.debug(`[${MODULE_ID}]`, ...args);
@@ -43,11 +46,8 @@ async function bridgeRequest(path, options = {}) {
 function rememberEvent(id) {
   if (!id || seenEvents.has(id)) return false;
   seenEvents.add(id);
-  if (seenEvents.size > MAX_SEEN_EVENTS) {
-    const ids = Array.from(seenEvents);
-    seenEvents.clear();
-    ids.slice(-MAX_SEEN_EVENTS).forEach(value => seenEvents.add(value));
-  }
+  while (seenEvents.size > MAX_SEEN_EVENTS) seenEvents.delete(seenEvents.values().next().value);
+  void game.settings.set(MODULE_ID, "processedEventIds", [...seenEvents]);
   return true;
 }
 
@@ -88,32 +88,52 @@ function renderRollCard(roll) {
 }
 
 async function postRoll(roll) {
+  // Only the active GM creates chat messages; this remains true if another GM connects manually.
+  if (!game.user?.isGM || game.users.activeGM?.id !== game.user.id) return;
   if (!rememberEvent(roll.id)) return;
   const actor = resolveActor(roll);
   const speaker = actor
     ? ChatMessage.getSpeaker({ actor })
     : { ...ChatMessage.getSpeaker(), alias: roll.character || "D&D Beyond" };
-
-  await ChatMessage.create({
-    speaker,
-    content: renderRollCard(roll),
-    flags: {
-      [MODULE_ID]: {
-        eventId: roll.id,
-        gameId: roll.gameId,
-        entityId: roll.entityId,
-        entityType: roll.entityType,
-        action: roll.action,
-        character: roll.character,
-        timestamp: roll.timestamp,
-        source: roll.source,
-        categories: [...new Set(roll.rolls.map(item => item.category))],
-        rolls: roll.rolls,
-        raw: roll.raw
-      }
+  const userMappings = setting("userMappings") || {};
+  const mappedUserId = userMappings[String(roll.userId || "")];
+  const dndbeyondUser = mappedUserId ? game.users.get(mappedUserId) : null;
+  const flags = {
+    [MODULE_ID]: {
+      eventId: roll.id,
+      rollId: roll.rollId,
+      gameId: roll.gameId,
+      entityId: roll.entityId,
+      entityType: roll.entityType,
+      userId: roll.userId,
+      scope: roll.scope,
+      action: roll.action,
+      character: roll.character,
+      timestamp: roll.timestamp,
+      source: roll.source,
+      categories: [...new Set(roll.rolls.map(item => item.category))],
+      rolls: roll.rolls,
+      raw: setting("debugLogging") ? roll.raw : undefined
     }
-  });
-  log("Mirrored fulfilled roll", { id: roll.id, character: roll.character, action: roll.action });
+  };
+  const firstCategory = roll.rolls[0]?.category;
+  const systemType = ({ attack: "attack", damage: "damage", save: "save", check: "skill", healing: "healing", initiative: "ability" })[firstCategory];
+  if (game.system.id === "dnd5e" && systemType) flags.dnd5e = { roll: { type: systemType } };
+
+  const messageData = {
+    speaker,
+    user: dndbeyondUser?.id || game.user.id,
+    flavor: `${roll.action} (${roll.rolls.map(item => item.rollType).join(", ")})`,
+    content: renderRollCard(roll),
+    rolls: roll.rolls.map(buildRecordedRoll),
+    flags
+  };
+  // D&D Beyond's gameId scope is public. User-scoped events are whispered to the mapped Foundry user,
+  // or to the GM only when no identity mapping exists, rather than accidentally exposed to the table.
+  if (roll.scope && roll.scope !== "gameId") messageData.whisper = [dndbeyondUser?.id || game.user.id];
+  await ChatMessage.create(messageData);
+  log("Mirrored fulfilled roll", { id: roll.id, rollId: roll.rollId, character: roll.character, action: roll.action });
+  Hooks.callAll("ddbGamelogSync.roll", roll);
 }
 
 function processRawMessage(raw) {
@@ -146,7 +166,9 @@ function startEventStream() {
     try {
       const status = JSON.parse(event.data);
       bridgeState = status.state || "unknown";
+      bridgeError = status.lastError || "";
       updateBridgeButton();
+      settingsApp?.render({ force: true });
       log("Transport status", status);
     } catch {}
   });
@@ -184,70 +206,101 @@ async function connectBridge({ cobaltSession, gameId, skipBeyond20 }) {
   ui.notifications?.info?.("DDB Roll Bridge connected. Waiting for new fulfilled rolls.");
 }
 
-function openSetupDialog() {
-  const campaignId = escapeHtml(setting("campaignId") || "");
-  const bridgeUrl = escapeHtml(baseUrl());
-  const bridgeToken = escapeHtml(setting("bridgeToken") || "");
-  const skipBeyond20 = setting("skipBeyond20") !== false;
-  const content = `
-    <form class="ddb-rb2-setup">
-      <p>Connect directly to the D&D Beyond game log. The CobaltSession cookie is sent only to the local bridge process and D&D Beyond's authentication endpoint; it is not saved in Foundry settings.</p>
-      <div class="form-group"><label>Local bridge URL</label><input name="bridgeUrl" type="url" value="${bridgeUrl}" required /></div>
-      <div class="form-group"><label>Local bridge access token</label><input name="bridgeToken" type="password" value="${bridgeToken}" required autocomplete="off" /></div>
-      <div class="form-group"><label>D&D Beyond campaign ID</label><input name="gameId" inputmode="numeric" value="${campaignId}" required /></div>
-      <div class="form-group"><label>CobaltSession cookie value</label><input name="cobaltSession" type="password" value="" required autocomplete="off" placeholder="Paste cookie value; do not include 'CobaltSession='" /></div>
-      <div class="form-group"><label><input name="skipBeyond20" type="checkbox" ${skipBeyond20 ? "checked" : ""}/> Skip rolls already flagged as delivered by Beyond20</label></div>
-      <p class="notes">The bridge must be running on this computer. The cookie is held in the bridge process memory only; restarting the bridge requires entering it again.</p>
-    </form>`;
+class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
+  static DEFAULT_OPTIONS = {
+    id: "ddb-rb2-settings",
+    tag: "form",
+    window: { title: "DDB Direct Roll Bridge", resizable: true },
+    position: { width: 620, height: "auto" },
+    form: { handler: this.#submit, submitOnChange: false, closeOnSubmit: false }
+  };
+  static PARTS = { main: { template: "modules/ddb-roll-bridge-v2/templates/settings.hbs" } };
 
-  new Dialog({
-    title: "DDB Direct Roll Bridge",
-    content,
-    buttons: {
-      connect: {
-        label: "Connect",
-        callback: async html => {
-          const root = html[0] || html;
-          const form = root.querySelector("form");
+  static async #submit(event, form, formData) {
+    const data = formData.object;
+    await game.settings.set(MODULE_ID, "bridgeUrl", String(data.bridgeUrl || "http://127.0.0.1:39210").trim().replace(/\/+$/, ""));
+    await game.settings.set(MODULE_ID, "bridgeToken", String(data.bridgeToken || "").trim());
+    await game.settings.set(MODULE_ID, "campaignId", String(data.gameId || "").trim());
+    await game.settings.set(MODULE_ID, "cobaltCookie", String(data.cobaltSession || "").trim());
+    await game.settings.set(MODULE_ID, "skipBeyond20", Boolean(data.skipBeyond20));
+    ui.notifications?.info?.("DDB Direct Roll Bridge settings saved on this client.");
+  }
+
+  async _prepareContext() {
+    return {
+      bridgeUrl: baseUrl(),
+      bridgeToken: setting("bridgeToken") || "",
+      campaignId: setting("campaignId") || "",
+      cobaltSession: setting("cobaltCookie") || "",
+      skipBeyond20: setting("skipBeyond20") !== false,
+      status: bridgeState,
+      lastError: bridgeError
+    };
+  }
+
+  async _onRender(context, options) {
+    super._onRender(context, options);
+    settingsApp = this;
+    this.element.querySelectorAll("[data-action]").forEach(button => {
+      button.addEventListener("click", async event => {
+        event.preventDefault();
+        const action = button.dataset.action;
+        if (action === "mapping") return openMappingDialog();
+        if (action === "status") {
+          try {
+            const result = await bridgeRequest("/status");
+            bridgeState = result.state || "unknown";
+            bridgeError = result.lastError || "";
+            updateBridgeButton();
+            return this.render({ force: true });
+          } catch (error) {
+            bridgeError = error.message;
+            bridgeState = "unreachable";
+            return this.render({ force: true });
+          }
+        }
+        if (action === "stop") {
+          try { await bridgeRequest("/stop", { method: "POST", body: "{}" }); }
+          catch (error) { bridgeError = error.message; }
+          stopEventStream();
+          bridgeState = "stopped";
+          updateBridgeButton();
+          return this.render({ force: true });
+        }
+        if (action === "connect") {
+          const form = this.element.querySelector("form");
           const data = new FormData(form);
-          const nextUrl = String(data.get("bridgeUrl") || "http://127.0.0.1:39210").trim().replace(/\/+$/, "");
-          const nextToken = String(data.get("bridgeToken") || "").trim();
           const gameId = String(data.get("gameId") || "").trim();
           const cobaltSession = String(data.get("cobaltSession") || "").trim();
-          const skip = form.querySelector('[name="skipBeyond20"]').checked;
-
           if (!/^\d{1,20}$/.test(gameId)) {
             ui.notifications?.error?.("Enter the numeric D&D Beyond campaign ID.");
             return;
           }
-          await game.settings.set(MODULE_ID, "bridgeUrl", nextUrl);
-          await game.settings.set(MODULE_ID, "bridgeToken", nextToken);
+          await game.settings.set(MODULE_ID, "bridgeUrl", String(data.get("bridgeUrl") || "http://127.0.0.1:39210").trim().replace(/\/+$/, ""));
+          await game.settings.set(MODULE_ID, "bridgeToken", String(data.get("bridgeToken") || "").trim());
+          await game.settings.set(MODULE_ID, "campaignId", gameId);
+          await game.settings.set(MODULE_ID, "cobaltCookie", cobaltSession);
+          await game.settings.set(MODULE_ID, "skipBeyond20", form.querySelector('[name="skipBeyond20"]').checked);
           try {
-            await connectBridge({ cobaltSession, gameId, skipBeyond20: skip });
-            ui.notifications?.info?.("Use the Character Mapping button to associate D&D Beyond characters with Foundry actors.");
+            await connectBridge({ cobaltSession, gameId, skipBeyond20: form.querySelector('[name="skipBeyond20"]').checked });
+            bridgeState = "connecting";
+            bridgeError = "";
+            this.render({ force: true });
           } catch (error) {
+            bridgeState = "error";
+            bridgeError = error.message;
             console.error(`[${MODULE_ID}] Connection failed:`, error);
             ui.notifications?.error?.(`DDB Roll Bridge: ${error.message}`);
+            this.render({ force: true });
           }
         }
-      },
-      mappings: {
-        label: "Character Mapping",
-        callback: () => openMappingDialog()
-      },
-      stop: {
-        label: "Stop",
-        callback: async () => {
-          try { await bridgeRequest("/stop", { method: "POST", body: "{}" }); } catch (error) { log("Stop request failed", error); }
-          stopEventStream();
-          bridgeState = "stopped";
-          updateBridgeButton();
-        }
-      },
-      cancel: { label: "Close" }
-    },
-    default: "connect"
-  }, { width: 620 }).render(true);
+      });
+    });
+  }
+}
+
+function openSetupDialog() {
+  new DDBBridgeSettingsApp().render({ force: true });
 }
 
 async function openMappingDialog() {
@@ -333,9 +386,34 @@ Hooks.once("init", () => {
     name: "D&D Beyond Character Mappings",
     scope: "world", config: false, type: Object, default: {}
   });
+  game.settings.register(MODULE_ID, "userMappings", {
+    name: "D&D Beyond User Mappings",
+    scope: "world", config: false, type: Object, default: {}
+  });
+  game.settings.register(MODULE_ID, "cobaltCookie", {
+    name: "CobaltSession cookie",
+    hint: "Client-only session credential. Never share it.",
+    scope: "client", config: false, type: String, default: ""
+  });
+  game.settings.register(MODULE_ID, "processedEventIds", {
+    name: "Processed D&D Beyond event IDs",
+    scope: "client", config: false, type: Array, default: []
+  });
+  game.settings.register(MODULE_ID, "debugLogging", {
+    name: "Debug logging", scope: "client", config: false, type: Boolean, default: false
+  });
+  game.settings.registerMenu(MODULE_ID, "connection", {
+    name: "DDB Direct Roll Bridge",
+    label: "Configure / Connect",
+    hint: "Configure the local D&D Beyond bridge and connection status.",
+    icon: "fas fa-dice-d20",
+    type: DDBBridgeSettingsApp,
+    restricted: false
+  });
 });
 
 Hooks.once("ready", () => {
+  for (const id of setting("processedEventIds") || []) seenEvents.add(String(id));
   if (!game.user?.isGM) return;
   Hooks.on("renderChatLog", addChatButton);
   log("Ready. Open the DDB Bridge button in chat to configure the direct connection.");
