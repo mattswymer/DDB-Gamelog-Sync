@@ -248,7 +248,7 @@ async function connectBridge({ cobaltSession, gameId, skipBeyond20 }) {
   ui.notifications?.info?.("DDB Roll Bridge connected. Waiting for new fulfilled rolls.");
 }
 
-class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
+class DDBBridgeSettingsApp extends foundry.applications.api.HandlebarsApplicationMixin(foundry.applications.api.ApplicationV2) {
   static DEFAULT_OPTIONS = {
     id: "ddb-rb2-settings",
     tag: "form",
@@ -493,6 +493,15 @@ Hooks.once("init", () => {
     type: DDBBridgeSettingsApp,
     restricted: false
   });
+  const module = game.modules.get(MODULE_ID);
+  if (module) {
+    module.api = {
+      openSetupDialog,
+      openMappingDialog,
+      getStatus: () => bridgeState,
+      stop: () => { stopEventStream(); bridgeState = "stopped"; updateBridgeButton(); }
+    };
+  }
 });
 
 Hooks.once("ready", async () => {
@@ -521,9 +530,4 @@ Hooks.on("deleteChatMessage", message => {
   if (id) seenEvents.delete(String(id));
 });
 
-game.modules.get(MODULE_ID).api = {
-  openSetupDialog,
-  openMappingDialog,
-  getStatus: () => bridgeState,
-  stop: () => { stopEventStream(); bridgeState = "stopped"; updateBridgeButton(); }
-};
+
