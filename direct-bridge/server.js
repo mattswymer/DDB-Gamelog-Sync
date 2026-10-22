@@ -25,6 +25,7 @@ let failures = 0;
 let state = "idle";
 let lastError = "";
 let seen = new Set();
+let lastSeenTimestamp = 0;
 const clients = new Set();
 
 function log(message) {
@@ -156,21 +157,42 @@ function remember(id) {
   return true;
 }
 
-async function seedHistory(auth) {
+function eventTimestamp(message) {
+  const raw = message?.dateTime ?? message?.timestamp ?? message?.createdAt;
+  const numeric = Number(raw);
+  if (Number.isFinite(numeric) && numeric > 0) return numeric < 1e12 ? numeric * 1000 : numeric;
+  const parsed = Date.parse(String(raw || ""));
+  return Number.isFinite(parsed) ? parsed : 0;
+}
+
+async function seedHistory(auth, sinceTimestamp = 0) {
   try {
     const url = new URL(REST_MESSAGES);
     url.searchParams.set("gameId", config.gameId);
     url.searchParams.set("userId", auth.userId);
     const response = await apiFetch(url, auth.token);
     if (!response.ok) {
-      log(`History dedup seed skipped (HTTP ${response.status}).`);
+      log(`History backfill skipped (HTTP ${response.status}).`);
       return;
     }
     const body = await response.json();
-    for (const message of body.data || []) if (message?.id) remember(String(message.id));
-    log(`Seeded ${seen.size} prior game-log event IDs.`);
+    const messages = Array.isArray(body.data) ? body.data : [];
+    let replayed = 0;
+    for (const message of messages) {
+      if (!message?.id) continue;
+      const ts = eventTimestamp(message);
+      const isCatchup = sinceTimestamp > 0 && ts >= sinceTimestamp && message.eventType === ROLL_EVENT;
+      if (isCatchup && remember(String(message.id))) {
+        broadcast("roll", message);
+        replayed += 1;
+      } else {
+        remember(String(message.id));
+      }
+      if (ts > lastSeenTimestamp) lastSeenTimestamp = ts;
+    }
+    log(`REST history checked: ${messages.length} messages, ${replayed} missed rolls replayed.`);
   } catch (error) {
-    log(`History dedup seed skipped: ${error.message}`);
+    log(`History backfill skipped: ${error.message}`);
   }
 }
 
@@ -221,6 +243,8 @@ function handleFrame(raw) {
   if (message.eventType !== ROLL_EVENT || !message.id) return;
   if (config?.skipBeyond20 && message.data?.__b20Override__ === true) return;
   if (!remember(String(message.id))) return;
+  const ts = eventTimestamp(message);
+  if (ts > lastSeenTimestamp) lastSeenTimestamp = ts;
   broadcast("roll", message);
 }
 
@@ -234,6 +258,8 @@ async function connect() {
     scheduleReconnect(`Authentication failed: ${error.message}`);
     return;
   }
+
+  await seedHistory(auth, lastSeenTimestamp);
 
   const url = new URL(WS_BASE);
   url.searchParams.set("gameId", config.gameId);
@@ -272,17 +298,18 @@ async function connect() {
   });
 }
 
-async function startPump() {
+async function startPump(sinceTimestamp = 0) {
   if (!config?.gameId || !config?.cobaltSession) throw new Error("Set a campaign ID and CobaltSession cookie first.");
   stopPump();
   stopped = false;
   failures = 0;
   seen = new Set();
+  lastSeenTimestamp = Number(sinceTimestamp) || 0;
   try {
     const auth = await mintToken();
-    await seedHistory(auth);
+    await seedHistory(auth, lastSeenTimestamp);
   } catch (error) {
-    log(`Could not seed history: ${error.message}`);
+    log(`Could not backfill history: ${error.message}`);
   }
   await connect();
 }
@@ -330,8 +357,9 @@ const server = http.createServer(async (req, res) => {
       return send(res, 200, { ok: true, gameId, userId: auth.userId, skipBeyond20: config.skipBeyond20, state });
     }
     if (url.pathname === "/start" && req.method === "POST") {
-      await startPump();
-      return send(res, 200, { ok: true, state });
+      const body = await readJson(req);
+      await startPump(Number(body.sinceTimestamp) || 0);
+      return send(res, 200, { ok: true, state, lastSeenTimestamp });
     }
     if (url.pathname === "/stop" && req.method === "POST") {
       stopPump();
