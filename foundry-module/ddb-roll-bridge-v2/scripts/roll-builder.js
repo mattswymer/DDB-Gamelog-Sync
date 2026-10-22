@@ -31,8 +31,11 @@ export function buildRecordedRoll(rollData) {
     if (dieValues.length !== count) continue;
     if (terms.length) terms.push(new foundry.dice.terms.OperatorTerm({ operator: "+" }));
     const chosen = selection && count > 1 ? (selection === "high" ? Math.max(...dieValues) : Math.min(...dieValues)) : null;
-    const die = new foundry.dice.terms.Die({ number: count, faces });
-    die.results = dieValues.map(result => ({ result, active: chosen === null || result === chosen }));
+    const die = new foundry.dice.terms.Die({
+      number: count,
+      faces,
+      results: dieValues.map(result => ({ result, active: chosen === null || result === chosen }))
+    });
     die._evaluated = true;
     terms.push(die);
   }
