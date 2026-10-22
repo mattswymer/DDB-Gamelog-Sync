@@ -313,37 +313,53 @@ async function openMappingDialog() {
     return;
   }
 
-  const mappings = setting("actorMappings") || {};
+  const actorMappings = setting("actorMappings") || {};
+  const userMappings = setting("userMappings") || {};
   const actors = game.actors?.contents || [];
-  const options = ['<option value="">— Use character name as chat alias —</option>']
-    .concat(actors.map(actor => `<option value="${escapeHtml(actor.id)}">${escapeHtml(actor.name)}</option>`))
-    .join("");
-  const rows = characters.map(character => `
-    <div class="form-group ddb-rb2-map-row">
-      <label><strong>${escapeHtml(character.name)}</strong><small> DDB ID: ${escapeHtml(character.id)}${character.userName ? ` · ${escapeHtml(character.userName)}` : ""}</small></label>
-      <select data-ddb-id="${escapeHtml(character.id)}">${options.replace(`value="${escapeHtml(mappings[character.id] || "")}"`, `value="${escapeHtml(mappings[character.id] || "")}" selected`)}</select>
-    </div>`).join("");
+  const users = game.users?.contents || [];
+  const rows = characters.map(character => {
+    const actorOptions = ['<option value="">— Use character name as chat alias —</option>']
+      .concat(actors.map(actor => `<option value="${escapeHtml(actor.id)}" ${actorMappings[character.id] === actor.id ? "selected" : ""}>${escapeHtml(actor.name)}</option>`))
+      .join("");
+    const userOptions = ['<option value="">— Not mapped —</option>']
+      .concat(users.map(user => `<option value="${escapeHtml(user.id)}" ${userMappings[String(character.userId)] === user.id ? "selected" : ""}>${escapeHtml(user.name)}</option>`))
+      .join("");
+    return `
+      <div class="form-group ddb-rb2-map-row">
+        <label><strong>${escapeHtml(character.name)}</strong><small> DDB character ID: ${escapeHtml(character.id)} · DDB user: ${escapeHtml(character.userName || character.userId || "unknown")}</small></label>
+        <select data-ddb-id="${escapeHtml(character.id)}" aria-label="Foundry actor for ${escapeHtml(character.name)}">${actorOptions}</select>
+        <select data-ddb-user-id="${escapeHtml(character.userId || "")}" aria-label="Foundry user for ${escapeHtml(character.userName || character.name)}">${userOptions}</select>
+      </div>`;
+  }).join("");
 
   new Dialog({
-    title: "D&D Beyond → Foundry Character Mapping",
-    content: `<form class="ddb-rb2-mappings"><p>Select the Foundry actor that represents each D&D Beyond character. Unmapped characters still post using their D&D Beyond name.</p>${rows || "<p>No characters were returned for this campaign.</p>"}</form>`,
+    title: "D&D Beyond → Foundry Character and User Mapping",
+    content: `<form class="ddb-rb2-mappings"><p>Map each D&D Beyond character to a Foundry actor and its D&D Beyond account to a Foundry user. User mapping is used for private game-log events.</p>${rows || "<p>No characters were returned for this campaign.</p>"}</form>`,
     buttons: {
       save: {
         label: "Save Mapping",
         callback: async html => {
           const root = html[0] || html;
-          const next = {};
+          const nextActors = {};
+          const nextUsers = { ...userMappings };
           root.querySelectorAll("select[data-ddb-id]").forEach(select => {
-            if (select.value) next[select.dataset.ddbId] = select.value;
+            if (select.value) nextActors[select.dataset.ddbId] = select.value;
           });
-          await game.settings.set(MODULE_ID, "actorMappings", next);
-          ui.notifications?.info?.("Character mapping saved.");
+          root.querySelectorAll("select[data-ddb-user-id]").forEach(select => {
+            const ddbUserId = select.dataset.ddbUserId;
+            if (!ddbUserId) return;
+            if (select.value) nextUsers[ddbUserId] = select.value;
+            else delete nextUsers[ddbUserId];
+          });
+          await game.settings.set(MODULE_ID, "actorMappings", nextActors);
+          await game.settings.set(MODULE_ID, "userMappings", nextUsers);
+          ui.notifications?.info?.("Character and user mappings saved.");
         }
       },
       cancel: { label: "Cancel" }
     },
     default: "save"
-  }, { width: 700 }).render(true);
+  }, { width: 760 }).render(true);
 }
 
 function addChatButton(app, html) {
