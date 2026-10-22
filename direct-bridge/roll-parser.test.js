@@ -134,3 +134,20 @@ test("maps DDB operation codes to advantage and disadvantage notation", () => {
   });
   assert.equal(normalized.rolls[0].rollKind, "advantage");
 });
+
+test("inherits event-level operation codes for nested roll entries", () => {
+  const normalized = normalizeMessage({
+    id: "event-operation",
+    eventType: "dice/roll/fulfilled",
+    data: {
+      operation: 1,
+      rolls: [{
+        rollType: "to hit",
+        diceNotation: { constant: 2, set: [{ count: 2, dieType: "d20" }] },
+        result: { total: 7, values: [16, 5] }
+      }]
+    }
+  });
+  assert.equal(normalized.rolls[0].rollKind, "disadvantage");
+  assert.equal(normalized.rolls[0].formula, "2d20kl + 2");
+});
