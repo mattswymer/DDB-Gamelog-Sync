@@ -31,10 +31,14 @@ function remember(id) {
 }
 
 async function postRoll(message) {
+  // The active GM is the sole message writer, even if another client manually connects.
+  if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) return;
   const parsed = parseRollEvent(message);
   if (!parsed || !remember(parsed.id)) return;
   if (parsed.scope !== String(setting("gameId")) && parsed.scope !== "gameId") {
-    parsed.whisper = game.users.contents.filter(user => user.getFlag(MODULE_ID, "ddbUserId") === parsed.userId).map(user => user.id);
+    parsed.whisper = game.users.contents.filter(user =>
+      String(user.getFlag(MODULE_ID, "ddbUserId") || "") === parsed.userId
+    ).map(user => user.id);
   }
   let actor = findActor(parsed);
   if (!actor && parsed.entityId && game.user.isGM) actor = await linkActorDialog(parsed);
@@ -53,6 +57,9 @@ async function postRoll(message) {
   };
   if (parsed.whisper?.length) messageData.whisper = parsed.whisper;
   await ChatMessage.create(messageData);
+  if (setting("debug")) console.debug("[DDB Gamelog Sync] Mirrored completed roll", {
+    id: parsed.id, rollId: parsed.rollId, action: parsed.action, rollType: parsed.rollType, total: parsed.total
+  });
   Hooks.callAll("ddbGamelogSync.roll", parsed);
 }
 
@@ -62,17 +69,15 @@ class DDBSyncSettingsApp extends foundry.applications.api.ApplicationV2 {
     tag: "form",
     window: { title: "DDB Gamelog Sync", resizable: true },
     position: { width: 540, height: "auto" },
-    actions: {
-      connect: this.#connect,
-      disconnect: this.#disconnect,
-      status: this.#refreshStatus
-    },
     form: { handler: this.#submit, submitOnChange: false, closeOnSubmit: false }
   };
   static PARTS = { main: { template: "modules/ddb-direct-roll-bridge/templates/settings.hbs" } };
 
   static async #connect() {
     try {
+      if (!game.user.isGM || game.users.activeGM?.id !== game.user.id) {
+        throw new Error("Only the active GM client may connect and create chat messages.");
+      }
       if (!setting("bridgeToken")) throw new Error("Paste the local bridge access token from the bridge console first.");
       if (!captureStarted) {
         await startCapture();
@@ -122,6 +127,7 @@ class DDBSyncSettingsApp extends foundry.applications.api.ApplicationV2 {
 
   async _onRender(context, options) {
     super._onRender(context, options);
+    settingsApp = this;
     this.element.querySelectorAll("[data-action]").forEach(button => {
       button.addEventListener("click", event => {
         event.preventDefault();
