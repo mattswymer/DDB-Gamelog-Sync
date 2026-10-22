@@ -1,10 +1,10 @@
 {
   "id": "ddb-direct-roll-bridge",
   "title": "DDB Gamelog Sync",
-  "description": "Mirrors completed D&D Beyond game-log rolls into Foundry VTT as native recorded-roll chat messages.",
-  "version": "0.2.0",
+  "description": "Mirrors completed D&D Beyond game-log rolls into readable Foundry VTT chat cards using a lightweight browser extension.",
+  "version": "1.0.1",
   "compatibility": {
-    "minimum": "13",
+    "minimum": "11",
     "verified": "13"
   },
   "authors": [
@@ -13,30 +13,17 @@
       "url": "https://github.com/mattswymer"
     }
   ],
-  "url": "https://github.com/mattswymer/DDB-Gamelog-Sync",
-  "manifest": "https://raw.githubusercontent.com/mattswymer/DDB-Gamelog-Sync/main/foundry-module/ddb-direct-roll-bridge/module.json",
-  "readme": "https://raw.githubusercontent.com/mattswymer/DDB-Gamelog-Sync/main/README.md",
-  "bugs": "https://github.com/mattswymer/DDB-Gamelog-Sync/issues",
+  "url": "https://github.com/mattswymer/DDB-Foundry-Roll-Bridge",
+  "manifest": "https://raw.githubusercontent.com/mattswymer/DDB-Foundry-Roll-Bridge/main/foundry-module/ddb-direct-roll-bridge/module.json",
+  "readme": "https://raw.githubusercontent.com/mattswymer/DDB-Foundry-Roll-Bridge/main/README.md",
+  "bugs": "https://github.com/mattswymer/DDB-Foundry-Roll-Bridge/issues",
+  "changelog": "https://raw.githubusercontent.com/mattswymer/DDB-Foundry-Roll-Bridge/main/CHANGELOG.md",
   "license": "LICENSE",
-  "esmodules": [
-    "scripts/main.js"
+  "scripts": [
+    "scripts/receiver.js"
   ],
-  "languages": [
-    {
-      "lang": "en",
-      "name": "English",
-      "path": "lang/en.json"
-    }
+  "styles": [
+    "styles/roll-card.css"
   ],
-  "relationships": {
-    "systems": [
-      {
-        "id": "dnd5e",
-        "type": "system",
-        "compatibility": {
-          "minimum": "3.0.0"
-        }
-      }
-    ]
-  }
+  "download": "https://github.com/mattswymer/DDB-Foundry-Roll-Bridge/releases/download/v1.0.1/ddb-direct-roll-bridge.zip"
 }
