@@ -11,8 +11,8 @@ The downloaded artifact contains:
 1. Extract the artifact ZIP to a folder you can find again.
 2. Double-click `DDB-Gamelog-Sync.exe`. Windows may show a SmartScreen warning because this experimental build is not code-signed; only run it if you trust the repository and have reviewed the source.
 3. Leave its console window open. It prints a randomly generated local access token. Keep that token private.
-4. In Foundry, install the included module ZIP using your normal module upload/install workflow, enable **DDB Roll Bridge (Direct)**, then open the chat sidebar's **DDB Bridge** button.
-5. Enter the token, your numeric D&D Beyond campaign ID, and your CobaltSession cookie value. The cookie is a session credential: never share it. It is held in the helper's memory and is not saved to disk.
+4. In Foundry v13, install the included module ZIP using your normal module installation workflow, enable **DDB Roll Bridge (Direct)**, then open **Configure / Connect** in Module Settings or use the chat sidebar's **DDB Bridge** button.
+5. Enter the token, your numeric D&D Beyond campaign ID, and your CobaltSession cookie value. The cookie is a session credential: never share it. It is stored in Foundry's client-only setting and held in the helper's memory while connected; it is never written to a helper-side file. Clear the client setting when you no longer want it saved in that browser.
 6. Click **Connect**, then **Character Mapping** to associate D&D Beyond characters with Foundry actors.
 
 The helper listens only on `127.0.0.1:39210`. Keep it running during the session. Closing the console stops the connection.
