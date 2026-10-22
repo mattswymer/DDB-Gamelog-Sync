@@ -12,7 +12,7 @@ let settingsApp = null;
 let lastNotifiedAuthError = "";
 
 function log(...args) {
-  try { if (game.settings.get(MODULE_ID, "debugLogging")) console.debug(`[${MODULE_ID}]`, ...args); }
+  try { if (game.settings.get(MODULE_ID, "debug")) console.debug(`[${MODULE_ID}]`, ...args); }
   catch { /* Settings may not be registered during module evaluation. */ }
 }
 
@@ -121,7 +121,7 @@ async function postRoll(roll) {
       source: roll.source,
       categories: [...new Set(roll.rolls.map(item => item.category))],
       rolls: roll.rolls,
-      raw: setting("debugLogging") ? roll.raw : undefined
+      raw: setting("debug") ? roll.raw : undefined
     }
   };
   const firstCategory = roll.rolls[0]?.category;
@@ -153,7 +153,7 @@ async function postRoll(roll) {
 }
 
 function processRawMessage(raw) {
-  if (setting("debugLogging")) console.debug(`[${MODULE_ID}] Raw fulfilled event`, raw);
+  if (setting("debug")) console.debug(`[${MODULE_ID}] Raw fulfilled event`, raw);
   const normalized = normalizeMessage(raw);
   if (!normalized) return;
   postRoll(normalized).catch(error => {
@@ -266,7 +266,7 @@ class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
     await game.settings.set(MODULE_ID, "cobaltCookie", String(data.cobaltSession || "").trim());
     await game.settings.set(MODULE_ID, "skipBeyond20", Boolean(data.skipBeyond20));
     await game.settings.set(MODULE_ID, "enabled", Boolean(data.enabled));
-    await game.settings.set(MODULE_ID, "debugLogging", Boolean(data.debugLogging));
+    await game.settings.set(MODULE_ID, "debug", Boolean(data.debug));
     ui.notifications?.info?.("DDB Direct Roll Bridge settings saved.");
   }
 
@@ -278,7 +278,7 @@ class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
       cobaltSession: setting("cobaltCookie") || "",
       skipBeyond20: setting("skipBeyond20") !== false,
       enabled: setting("enabled") !== false,
-      debugLogging: setting("debugLogging") === true,
+      debug: setting("debug") === true,
       status: bridgeState,
       lastError: bridgeError
     };
@@ -328,7 +328,7 @@ class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
           await game.settings.set(MODULE_ID, "cobaltCookie", cobaltSession);
           await game.settings.set(MODULE_ID, "skipBeyond20", form.querySelector('[name="skipBeyond20"]').checked);
           await game.settings.set(MODULE_ID, "enabled", form.querySelector('[name="enabled"]').checked);
-          await game.settings.set(MODULE_ID, "debugLogging", form.querySelector('[name="debugLogging"]').checked);
+          await game.settings.set(MODULE_ID, "debug", form.querySelector('[name="debug"]').checked);
           try {
             await connectBridge({ cobaltSession, gameId, skipBeyond20: form.querySelector('[name="skipBeyond20"]').checked });
             bridgeState = "connecting";
@@ -479,7 +479,7 @@ Hooks.once("init", () => {
     name: "Last seen D&D Beyond timestamp",
     scope: "client", config: false, type: Number, default: 0
   });
-  game.settings.register(MODULE_ID, "debugLogging", {
+  game.settings.register(MODULE_ID, "debug", {
     name: "Debug logging", scope: "client", config: false, type: Boolean, default: false
   });
   game.settings.register(MODULE_ID, "enabled", {
