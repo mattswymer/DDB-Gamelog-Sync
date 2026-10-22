@@ -192,13 +192,15 @@ async function connectBridge({ cobaltSession, gameId, skipBeyond20 }) {
   const token = setting("bridgeToken");
   if (!token) throw new Error("Enter the local bridge access token shown in the direct-bridge terminal.");
 
-  await bridgeRequest("/configure", {
+  const configured = await bridgeRequest("/configure", {
     method: "POST",
     body: JSON.stringify({ cobaltSession, gameId, skipBeyond20 })
   });
   await bridgeRequest("/start", { method: "POST", body: "{}" });
 
   await game.settings.set(MODULE_ID, "campaignId", String(gameId));
+  await game.settings.set(MODULE_ID, "gameId", String(gameId));
+  if (configured.userId) await game.settings.set(MODULE_ID, "userId", String(configured.userId));
   await game.settings.set(MODULE_ID, "skipBeyond20", !!skipBeyond20);
   startEventStream();
   bridgeState = "connecting";
@@ -392,6 +394,14 @@ Hooks.once("init", () => {
     name: "D&D Beyond Campaign ID",
     hint: "Numeric ID from the D&D Beyond campaign URL.",
     scope: "client", config: true, type: String, default: ""
+  });
+  game.settings.register(MODULE_ID, "gameId", {
+    name: "D&D Beyond Game ID",
+    scope: "world", config: false, type: String, default: ""
+  });
+  game.settings.register(MODULE_ID, "userId", {
+    name: "D&D Beyond User ID",
+    scope: "client", config: false, type: String, default: ""
   });
   game.settings.register(MODULE_ID, "skipBeyond20", {
     name: "Skip Beyond20-bridged rolls",
