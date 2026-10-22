@@ -1,0 +1,36 @@
+{
+  "manifest_version": 3,
+  "name": "DDB Gamelog Sync",
+  "description": "Reads completed D&D Beyond game-log rolls and mirrors them into Foundry chat.",
+  "version": "1.0.0",
+  "host_permissions": [
+    "https://www.dndbeyond.com/*",
+    "https://dndbeyond.com/*",
+    "https://forge-vtt.com/*",
+    "https://*.forge-vtt.com/*",
+    "http://localhost/*",
+    "http://127.0.0.1/*",
+    "https://localhost/*",
+    "https://127.0.0.1/*"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["https://*.dndbeyond.com/*"],
+      "js": ["ddb-websocket-tap.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["https://*.dndbeyond.com/*"],
+      "js": ["ddb-content.js"],
+      "run_at": "document_idle"
+    }
+  ],
+  "action": {
+    "default_title": "DDB Gamelog Sync",
+    "default_popup": "popup.html"
+  }
+}
