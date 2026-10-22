@@ -5,19 +5,27 @@
 export const ROLL_EVENT = "dice/roll/fulfilled";
 
 export function rollNotation(roll = {}) {
+  let formula = "";
   if (typeof roll.diceNotationStr === "string" && roll.diceNotationStr.trim()) {
-    return roll.diceNotationStr.trim();
+    formula = roll.diceNotationStr.trim();
+  } else {
+    const sets = (roll.diceNotation?.set ?? []).map((set) => {
+      const count = Number(set?.count ?? 0);
+      const dieType = String(set?.dieType ?? "");
+      return count > 0 && /^d\d+$/i.test(dieType) ? `${count}${dieType}` : "";
+    }).filter(Boolean);
+    const constant = Number(roll.diceNotation?.constant ?? 0);
+    const dice = sets.join(" + ");
+    if (!dice) formula = Number.isFinite(constant) ? String(constant) : "";
+    else if (!constant) formula = dice;
+    else formula = `${dice} ${constant > 0 ? "+" : "-"} ${Math.abs(constant)}`;
   }
-  const sets = (roll.diceNotation?.set ?? []).map((set) => {
-    const count = Number(set?.count ?? 0);
-    const dieType = String(set?.dieType ?? "");
-    return count > 0 && /^d\d+$/i.test(dieType) ? `${count}${dieType}` : "";
-  }).filter(Boolean);
-  const constant = Number(roll.diceNotation?.constant ?? 0);
-  const dice = sets.join(" + ");
-  if (!dice) return Number.isFinite(constant) ? String(constant) : "";
-  if (!constant) return dice;
-  return `${dice} ${constant > 0 ? "+" : "-"} ${Math.abs(constant)}`;
+  const kind = String(roll.rollKind ?? "").toLowerCase();
+  const operation = Number(roll.operation);
+  const keep = kind.includes("advantage") || operation === 2 ? "kh"
+    : kind.includes("disadvantage") || operation === 1 ? "kl" : "";
+  if (keep) formula = formula.replace(/2d20(?![a-z])/i, `2d20${keep}`);
+  return formula;
 }
 
 export function classifyRoll(roll = {}, action = "") {
@@ -43,7 +51,8 @@ export function normalizeMessage(message) {
     return {
       index,
       rollType: String(roll?.rollType ?? "roll"),
-      rollKind: String(roll?.rollKind ?? ""),
+      rollKind: String(roll?.rollKind ?? (Number(roll?.operation) === 2 ? "advantage" : Number(roll?.operation) === 1 ? "disadvantage" : "")),
+      operation: Number(roll?.operation) || 0,
       category: classifyRoll(roll, action),
       formula: rollNotation(roll),
       total: result.total !== null && result.total !== undefined && Number.isFinite(Number(result.total)) ? Number(result.total) : null,
