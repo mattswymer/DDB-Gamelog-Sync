@@ -37,6 +37,7 @@ export function classifyRoll(roll = {}, action = "") {
   if (/damage|\bforce\b|\bslashing\b|\bpiercing\b|\bbludgeoning\b|\bfire\b|\bcold\b|\blightning\b|\bthunder\b|\bpoison\b|\bpsychic\b|\bradiant\b|\bnecrotic\b|\bacid\b/.test(type)) return "damage";
   if (/to hit|attack roll|\battack\b/.test(type)) return "attack";
   if (/ability check|skill check|\bcheck\b/.test(type)) return "check";
+  if (/^(str|dex|con|int|wis|cha)$/.test(actionType)) return "check";
   return "roll";
 }
 
