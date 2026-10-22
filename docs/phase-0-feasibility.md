@@ -22,7 +22,7 @@ The WebSocket client currently supplies `Origin: https://www.dndbeyond.com` from
 
 ## What is not yet proven
 
-This repository cannot validate live D&D Beyond authentication without a current session cookie and an actual running bridge. A successful static build is not proof that D&D Beyond accepts the exchange, that the current cookie is valid, or that a campaign's event payload matches the parser. The first live run must verify token exchange, WebSocket open, and a new `dice/roll/fulfilled` event. REST history recovery is currently only a dedupe seed; full catch-up since the last seen timestamp remains unfinished.
+This repository cannot validate live D&D Beyond authentication without a current session cookie and an actual running bridge. A successful static build is not proof that D&D Beyond accepts the exchange, that the current cookie is valid, or that a campaign's event payload matches the parser. The first live run must verify token exchange, WebSocket open, and a new `dice/roll/fulfilled` event. A best-effort REST catch-up now replays fulfilled events at or after the last seen timestamp, then relies on message-ID deduplication. This is not yet proven to cover all missed events because the endpoint's history window and pagination behavior have not been verified.
 
 ## Phase 0 acceptance checklist
 
