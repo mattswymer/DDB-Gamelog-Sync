@@ -1,0 +1,49 @@
+name: Direct Bridge — tests and Windows download
+
+on:
+  push:
+    branches:
+      - direct-bridge-v2-no-npm
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  test-and-package:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+      - name: Set up Node (build machine only)
+        uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - name: Install build dependencies
+        working-directory: direct-bridge
+        run: npm install
+      - name: Run parser tests
+        working-directory: direct-bridge
+        run: npm test
+      - name: Check JavaScript syntax
+        shell: pwsh
+        run: |
+          node --check direct-bridge/server.js
+          node --check foundry-module/ddb-roll-bridge-v2/scripts/main.js
+          node --check foundry-module/ddb-roll-bridge-v2/scripts/roll-parser.js
+      - name: Build standalone Windows executable
+        working-directory: direct-bridge
+        run: npm run build
+      - name: Package Foundry module
+        shell: pwsh
+        run: |
+          Compress-Archive -Path foundry-module/ddb-roll-bridge-v2 -DestinationPath direct-bridge/dist/ddb-roll-bridge-v2-foundry-module.zip -Force
+      - name: Upload ready-to-download bundle
+        uses: actions/upload-artifact@v4
+        with:
+          name: DDB-Gamelog-Sync-Windows
+          path: |
+            direct-bridge/dist/DDB-Gamelog-Sync.exe
+            direct-bridge/dist/ddb-roll-bridge-v2-foundry-module.zip
+          if-no-files-found: error
+          retention-days: 30
