@@ -1,0 +1,30 @@
+<form class="ddb-gamelog-sync-settings">
+  <p><strong>Status:</strong> {{status}}</p>
+  {{#if lastError}}<p class="notification error">{{lastError}}</p>{{/if}}
+  <div class="form-group">
+    <label for="ddb-game-id">D&D Beyond campaign ID</label>
+    <input id="ddb-game-id" name="gameId" type="text" value="{{gameId}}" placeholder="Numeric campaign ID">
+  </div>
+  <div class="form-group">
+    <label for="ddb-cobalt-cookie">CobaltSession cookie value</label>
+    <input id="ddb-cobalt-cookie" name="cobaltCookie" type="password" value="{{cobaltCookie}}" autocomplete="off">
+    <p class="hint">Keep this private. It is sent only to the local bridge on this computer and is held in memory by that bridge.</p>
+  </div>
+  <div class="form-group">
+    <label for="ddb-bridge-token">Local bridge access token</label>
+    <input id="ddb-bridge-token" name="bridgeToken" type="password" value="{{bridgeToken}}" autocomplete="off">
+    <p class="hint">Copy this from the DDB Gamelog Sync bridge console.</p>
+  </div>
+  <div class="form-group">
+    <label><input type="checkbox" name="enabled" {{checked enabled}}> Enable automatic capture on GM client</label>
+  </div>
+  <div class="form-group">
+    <label><input type="checkbox" name="debug" {{checked debug}}> Debug logging</label>
+  </div>
+  <footer class="form-footer">
+    <button type="submit"><i class="fas fa-save"></i> Save Settings</button>
+    <button type="button" data-action="connect"><i class="fas fa-plug"></i> Connect</button>
+    <button type="button" data-action="disconnect"><i class="fas fa-unlink"></i> Disconnect</button>
+    <button type="button" data-action="status"><i class="fas fa-sync"></i> Refresh Status</button>
+  </footer>
+</form>
