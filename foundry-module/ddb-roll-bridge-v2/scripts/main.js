@@ -124,7 +124,10 @@ async function postRoll(roll) {
     }
   };
   const firstCategory = roll.rolls[0]?.category;
-  const systemType = ({ attack: "attack", damage: "damage", save: "save", check: "skill", healing: "healing", initiative: "ability" })[firstCategory];
+  const rawAbilityCheck = /^(str|dex|con|int|wis|cha)$/i.test(String(roll.action || ""));
+  const systemType = firstCategory === "check" && rawAbilityCheck
+    ? "ability"
+    : ({ attack: "attack", damage: "damage", save: "save", check: "skill", healing: "healing", initiative: "ability" })[firstCategory];
   if (game.system.id === "dnd5e" && systemType) flags.dnd5e = { roll: { type: systemType } };
 
   const messageData = {
