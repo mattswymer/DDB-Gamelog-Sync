@@ -36,7 +36,7 @@ export function normalizeMessage(message) {
   if (!message || message.eventType !== ROLL_EVENT || !message.id) return null;
   const data = message.data ?? {};
   const action = String(data.action ?? "D&D Beyond Roll").trim() || "D&D Beyond Roll";
-  const character = String(data.context?.name ?? "Unknown Character").trim() || "Unknown Character";
+  const character = String(data.context?.name ?? data.characterName ?? "Unknown Character").trim() || "Unknown Character";
   const rolls = (Array.isArray(data.rolls) ? data.rolls : []).map((roll, index) => {
     const result = roll?.result ?? {};
     const values = Array.isArray(result.values) ? result.values.map(Number).filter(Number.isFinite) : [];
@@ -56,10 +56,12 @@ export function normalizeMessage(message) {
   if (!rolls.length) return null;
   return {
     id: String(message.id),
+    rollId: String(message.rollId ?? data.rollId ?? message.id),
     gameId: String(message.gameId ?? ""),
-    userId: String(message.userId ?? ""),
-    entityId: String(message.entityId ?? ""),
-    entityType: String(message.entityType ?? ""),
+    userId: String(message.userId ?? data.userId ?? ""),
+    entityId: String(message.entityId ?? data.entityId ?? ""),
+    entityType: String(message.entityType ?? data.entityType ?? ""),
+    scope: String(message.messageScope ?? data.messageScope ?? "gameId"),
     eventType: message.eventType,
     timestamp: Number(message.dateTime) || Date.now(),
     character,
