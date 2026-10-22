@@ -10,6 +10,7 @@ const ACTIVE_CHARACTERS = "https://www.dndbeyond.com/api/campaign/stt/active-sho
 const ROLL_EVENT = "dice/roll/fulfilled";
 const BACKOFF_MS = [1000, 2000, 5000, 10000, 20000];
 const REFRESH_LEAD_MS = 40000;
+const HEARTBEAT_MS = 25000;
 const HEALTHY_AFTER_MS = 15000;
 const MAX_SEEN = 3000;
 const accessToken = crypto.randomBytes(32).toString("hex");
@@ -20,6 +21,7 @@ let socket = null;
 let reconnectTimer = null;
 let refreshTimer = null;
 let healthyTimer = null;
+let heartbeatTimer = null;
 let stopped = true;
 let failures = 0;
 let state = "idle";
@@ -200,7 +202,8 @@ function clearTimers() {
   if (reconnectTimer) clearTimeout(reconnectTimer);
   if (refreshTimer) clearTimeout(refreshTimer);
   if (healthyTimer) clearTimeout(healthyTimer);
-  reconnectTimer = refreshTimer = healthyTimer = null;
+  if (heartbeatTimer) clearInterval(heartbeatTimer);
+  reconnectTimer = refreshTimer = healthyTimer = heartbeatTimer = null;
 }
 
 function closeSocket() {
@@ -275,6 +278,12 @@ async function connect() {
     setStatus("connected", "");
     log(`Connected to D&D Beyond game log for campaign ${config.gameId}.`);
     healthyTimer = setTimeout(markHealthy, HEALTHY_AFTER_MS);
+    heartbeatTimer = setInterval(() => {
+      if (socket === ws && ws.readyState === WebSocket.OPEN) {
+        try { ws.ping(); } catch (error) { log(`Heartbeat failed: ${error.message}`); }
+      }
+    }, HEARTBEAT_MS);
+    ws.on("pong", markHealthy);
     const lifetime = Math.max(30000, auth.expiresAt - Date.now() - REFRESH_LEAD_MS);
     refreshTimer = setTimeout(() => {
       if (stopped) return;
