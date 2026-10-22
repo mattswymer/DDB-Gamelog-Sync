@@ -141,7 +141,8 @@ async function postRoll(roll) {
   };
   // D&D Beyond's gameId scope is public. User-scoped events are whispered to the mapped Foundry user,
   // or to the GM only when no identity mapping exists, rather than accidentally exposed to the table.
-  if (roll.scope && roll.scope !== "gameId") messageData.whisper = [dndbeyondUser?.id || game.user.id];
+  const isPublicScope = !roll.scope || roll.scope === "gameId" || roll.scope === String(roll.gameId) || roll.scope === String(setting("gameId"));
+  if (!isPublicScope) messageData.whisper = [dndbeyondUser?.id || game.user.id];
   await ChatMessage.create(messageData);
   log("Mirrored fulfilled roll", { id: roll.id, rollId: roll.rollId, character: roll.character, action: roll.action });
   Hooks.callAll("ddbGamelogSync.roll", roll);
