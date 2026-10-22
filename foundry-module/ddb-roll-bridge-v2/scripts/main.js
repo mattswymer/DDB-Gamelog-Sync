@@ -10,7 +10,8 @@ let bridgeError = "";
 let settingsApp = null;
 
 function log(...args) {
-  console.debug(`[${MODULE_ID}]`, ...args);
+  try { if (game.settings.get(MODULE_ID, "debugLogging")) console.debug(`[${MODULE_ID}]`, ...args); }
+  catch { /* Settings may not be registered during module evaluation. */ }
 }
 
 function escapeHtml(value) {
@@ -89,7 +90,7 @@ function renderRollCard(roll) {
 
 async function postRoll(roll) {
   // Only the active GM creates chat messages; this remains true if another GM connects manually.
-  if (!game.user?.isGM || game.users.activeGM?.id !== game.user.id) return;
+  if (!setting("enabled") || !game.user?.isGM || game.users.activeGM?.id !== game.user.id) return;
   if (!rememberEvent(roll.id)) return;
   const nextSeen = Math.max(Number(setting("lastSeenTimestamp") || 0), Number(roll.timestamp) || Date.now());
   void game.settings.set(MODULE_ID, "lastSeenTimestamp", nextSeen);
@@ -246,7 +247,9 @@ class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
     await game.settings.set(MODULE_ID, "campaignId", String(data.gameId || "").trim());
     await game.settings.set(MODULE_ID, "cobaltCookie", String(data.cobaltSession || "").trim());
     await game.settings.set(MODULE_ID, "skipBeyond20", Boolean(data.skipBeyond20));
-    ui.notifications?.info?.("DDB Direct Roll Bridge settings saved on this client.");
+    await game.settings.set(MODULE_ID, "enabled", Boolean(data.enabled));
+    await game.settings.set(MODULE_ID, "debugLogging", Boolean(data.debugLogging));
+    ui.notifications?.info?.("DDB Direct Roll Bridge settings saved.");
   }
 
   async _prepareContext() {
@@ -256,6 +259,8 @@ class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
       campaignId: setting("campaignId") || "",
       cobaltSession: setting("cobaltCookie") || "",
       skipBeyond20: setting("skipBeyond20") !== false,
+      enabled: setting("enabled") !== false,
+      debugLogging: setting("debugLogging") === true,
       status: bridgeState,
       lastError: bridgeError
     };
@@ -304,6 +309,8 @@ class DDBBridgeSettingsApp extends foundry.applications.api.ApplicationV2 {
           await game.settings.set(MODULE_ID, "campaignId", gameId);
           await game.settings.set(MODULE_ID, "cobaltCookie", cobaltSession);
           await game.settings.set(MODULE_ID, "skipBeyond20", form.querySelector('[name="skipBeyond20"]').checked);
+          await game.settings.set(MODULE_ID, "enabled", form.querySelector('[name="enabled"]').checked);
+          await game.settings.set(MODULE_ID, "debugLogging", form.querySelector('[name="debugLogging"]').checked);
           try {
             await connectBridge({ cobaltSession, gameId, skipBeyond20: form.querySelector('[name="skipBeyond20"]').checked });
             bridgeState = "connecting";
@@ -453,6 +460,9 @@ Hooks.once("init", () => {
   game.settings.register(MODULE_ID, "debugLogging", {
     name: "Debug logging", scope: "client", config: false, type: Boolean, default: false
   });
+  game.settings.register(MODULE_ID, "enabled", {
+    name: "Enable roll mirroring", scope: "world", config: false, type: Boolean, default: true
+  });
   game.settings.registerMenu(MODULE_ID, "connection", {
     name: "DDB Direct Roll Bridge",
     label: "Configure / Connect",
@@ -463,11 +473,24 @@ Hooks.once("init", () => {
   });
 });
 
-Hooks.once("ready", () => {
+Hooks.once("ready", async () => {
   for (const id of setting("processedEventIds") || []) seenEvents.add(String(id));
   if (!game.user?.isGM) return;
   Hooks.on("renderChatLog", addChatButton);
-  log("Ready. Open the DDB Bridge button in chat to configure the direct connection.");
+  log("Ready. Open the DDB Bridge button in chat or use Module Settings to configure the connection.");
+  if (game.users.activeGM?.id !== game.user.id || !setting("enabled")) return;
+  if (!setting("bridgeToken") || !setting("campaignId") || !setting("cobaltCookie")) return;
+  try {
+    await connectBridge({
+      cobaltSession: setting("cobaltCookie"),
+      gameId: setting("campaignId"),
+      skipBeyond20: setting("skipBeyond20") !== false
+    });
+  } catch (error) {
+    bridgeState = "error";
+    bridgeError = error.message;
+    log("Automatic connection failed", error.message);
+  }
 });
 
 Hooks.on("deleteChatMessage", message => {
