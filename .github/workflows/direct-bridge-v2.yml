@@ -4,6 +4,9 @@ on:
   push:
     branches:
       - direct-bridge-v2-no-npm
+  pull_request:
+    branches:
+      - main
   workflow_dispatch:
 
 permissions:
