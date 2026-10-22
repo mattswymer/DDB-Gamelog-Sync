@@ -110,3 +110,27 @@ test("advantage keeps the higher recorded d20 and does not roll again", () => {
     delete globalThis.Roll;
   }
 });
+
+test("maps DDB operation codes to advantage and disadvantage notation", () => {
+  assert.equal(rollNotation({
+    operation: 2,
+    diceNotation: { constant: 5, set: [{ count: 2, dieType: "d20" }] }
+  }), "2d20kh + 5");
+  assert.equal(rollNotation({
+    operation: 1,
+    diceNotationStr: "2d20 + 3"
+  }), "2d20kl + 3");
+  const normalized = normalizeMessage({
+    id: "adv-1",
+    eventType: "dice/roll/fulfilled",
+    data: {
+      rolls: [{
+        rollType: "to hit",
+        operation: 2,
+        diceNotation: { constant: 5, set: [{ count: 2, dieType: "d20" }] },
+        result: { total: 23, values: [4, 18] }
+      }]
+    }
+  });
+  assert.equal(normalized.rolls[0].rollKind, "advantage");
+});
