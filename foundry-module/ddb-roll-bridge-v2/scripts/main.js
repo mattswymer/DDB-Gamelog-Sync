@@ -56,7 +56,7 @@ function rememberEvent(id) {
 
 function resolveActor(roll) {
   const actors = game.actors?.contents || [];
-  const flagged = actors.find(actor => String(actor.getFlag("ddb-gamelog-sync", "ddbId") || "") === String(roll.entityId || ""));
+  const flagged = actors.find(actor => String(actor.getFlag(MODULE_ID, "ddbId") || "") === String(roll.entityId || ""));
   if (flagged) return flagged;
   const mappings = setting("actorMappings") || {};
   const mappedId = mappings[String(roll.entityId)];
@@ -394,7 +394,7 @@ async function openMappingDialog() {
             if (select.value) {
               nextActors[select.dataset.ddbId] = select.value;
               const actor = game.actors.get(select.value);
-              if (actor) void actor.setFlag("ddb-gamelog-sync", "ddbId", String(select.dataset.ddbId));
+              if (actor) void actor.setFlag(MODULE_ID, "ddbId", String(select.dataset.ddbId));
             }
           });
           root.querySelectorAll("select[data-ddb-user-id]").forEach(select => {
