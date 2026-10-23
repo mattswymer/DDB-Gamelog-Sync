@@ -1,0 +1,19 @@
+<form class="ddb-rb2-setup">
+  <p><strong>Connection status:</strong> <span>{{status}}</span></p>
+  {{#if lastError}}<p class="notification error">{{lastError}}</p>{{/if}}
+  <div class="form-group"><label>Local bridge URL</label><input name="bridgeUrl" type="url" value="{{bridgeUrl}}" required /></div>
+  <div class="form-group"><label>Local bridge access token</label><input name="bridgeToken" type="password" value="{{bridgeToken}}" required autocomplete="off" /></div>
+  <div class="form-group"><label>D&D Beyond campaign ID</label><input name="gameId" inputmode="numeric" value="{{campaignId}}" required /></div>
+  <div class="form-group"><label>CobaltSession cookie value</label><input name="cobaltSession" type="password" value="{{cobaltSession}}" required autocomplete="off" /></div>
+  <div class="form-group"><label><input name="skipBeyond20" type="checkbox" {{checked skipBeyond20}} /> Skip rolls already flagged as delivered by Beyond20</label></div>
+  <div class="form-group"><label><input name="enabled" type="checkbox" {{checked enabled}} /> Enable roll mirroring</label></div>
+  <div class="form-group"><label><input name="debug" type="checkbox" {{checked debug}} /> Debug logging</label></div>
+  <p class="notes">The cookie is stored only in this Foundry client setting and held in the local bridge's memory while running. Never share either token.</p>
+  <footer class="form-footer">
+    <button type="submit"><i class="fas fa-save"></i> Save Settings</button>
+    <button type="button" data-action="connect"><i class="fas fa-plug"></i> Connect</button>
+    <button type="button" data-action="stop"><i class="fas fa-unlink"></i> Disconnect</button>
+    <button type="button" data-action="status"><i class="fas fa-sync"></i> Refresh Status</button>
+    <button type="button" data-action="mapping"><i class="fas fa-link"></i> Character Mapping</button>
+  </footer>
+</form>

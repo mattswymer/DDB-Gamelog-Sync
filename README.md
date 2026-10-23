@@ -1,4 +1,20 @@
-# DDB Direct Roll Bridge
+# DDB Gamelog Sync
+
+**D&D Beyond → Foundry VTT roll synchronization**
+
+This repository contains two implementations. The existing browser-extension bridge remains the fallback. The experimental direct bridge now includes a local authentication/WebSocket service, REST catch-up, typed roll parsing, recorded native Foundry Roll objects, actor/user mapping, and an ApplicationV2 settings menu. Live D&D Beyond authentication and end-to-end Foundry delivery still need validation.
+
+## Choose your path
+
+- **Existing extension-based version:** continue with the instructions below for the current known workflow.
+- **New direct bridge (experimental):** see [Windows quick start](direct-bridge/README-WINDOWS.md) and the [direct bridge source](direct-bridge/server.js). A prebuilt Windows executable is intended to remove the need to install Node.js or npm on your own computer.
+- **Ready-to-download builds:** open [GitHub Actions](https://github.com/mattswymer/DDB-Gamelog-Sync/actions), choose **Direct Bridge — tests and Windows download**, open the latest successful run, and download the `DDB-Gamelog-Sync-Windows` artifact.
+
+The direct bridge requires a small local helper for D&D Beyond authentication. The Windows workflow packages that helper as a double-click executable, so end users do not need Node.js or npm installed. Do not rely on it for a live session until the build passes and a real campaign roll is verified. See [Phase 0 feasibility notes](docs/phase-0-feasibility.md) for what is and is not proven.
+
+---
+
+## Existing extension-based version
 
 **A lightweight D&D Beyond → Foundry VTT roll mirror**
 

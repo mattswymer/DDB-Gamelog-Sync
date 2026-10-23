@@ -1,0 +1,44 @@
+{
+  "id": "ddb-roll-bridge-v2",
+  "title": "DDB Roll Bridge (Direct)",
+  "description": "Direct D&D Beyond game-log capture with recorded native Foundry rolls, character mapping, and a local bridge service.",
+  "version": "0.2.0",
+  "compatibility": {
+    "minimum": "13",
+    "verified": "13"
+  },
+  "authors": [
+    {
+      "name": "Matt Swymer",
+      "url": "https://github.com/mattswymer"
+    }
+  ],
+  "url": "https://github.com/mattswymer/DDB-Gamelog-Sync",
+  "manifest": "https://raw.githubusercontent.com/mattswymer/DDB-Gamelog-Sync/main/foundry-module/ddb-roll-bridge-v2/module.json",
+  "readme": "https://raw.githubusercontent.com/mattswymer/DDB-Gamelog-Sync/main/direct-bridge/README-WINDOWS.md",
+  "bugs": "https://github.com/mattswymer/DDB-Gamelog-Sync/issues",
+  "esmodules": [
+    "scripts/main.js"
+  ],
+  "languages": [
+    {
+      "lang": "en",
+      "name": "English",
+      "path": "lang/en.json"
+    }
+  ],
+  "styles": [
+    "styles/roll-card.css"
+  ],
+  "relationships": {
+    "systems": [
+      {
+        "id": "dnd5e",
+        "type": "system",
+        "compatibility": {
+          "minimum": "3.0.0"
+        }
+      }
+    ]
+  }
+}
