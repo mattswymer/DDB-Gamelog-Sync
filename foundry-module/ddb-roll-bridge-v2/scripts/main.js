@@ -169,10 +169,11 @@ function stopEventStream() {
   }
 }
 
-function startEventStream() {
+async function startEventStream() {
   stopEventStream();
+  const ticketResponse = await bridgeRequest("/stream-ticket", { method: "POST", body: "{}" });
   const url = new URL(`${baseUrl()}/events`);
-  url.searchParams.set("token", setting("bridgeToken") || "");
+  url.searchParams.set("ticket", ticketResponse.ticket);
   eventSource = new EventSource(url.toString());
 
   eventSource.addEventListener("roll", event => {
