@@ -209,8 +209,26 @@ async function startEventStream() {
       updateBridgeButton();
       if (!opened) {
         clearTimeout(timeout);
-        reject(new Error("The local bridge event stream failed before connecting."));
+        eventSource?.close();
+        eventSource = null;
+        reject(new Error("The bridge event stream failed before connecting. Check the bridge URL, access token, and hosting status."));
+        return;
       }
+      // A stream ticket is single-use. Recreate the stream with a fresh ticket instead
+      // of letting EventSource retry the expired/consumed URL indefinitely.
+      const failedSource = eventSource;
+      failedSource?.close();
+      if (eventSource === failedSource) eventSource = null;
+      setTimeout(() => {
+        if (setting("enabled") && game.user?.isGM && game.users.activeGM?.id === game.user.id) {
+          startEventStream().catch(error => {
+            bridgeError = error.message;
+            bridgeState = "reconnecting";
+            updateBridgeButton();
+            log("Could not refresh event stream", error.message);
+          });
+        }
+      }, 1500);
     };
   });
 }
