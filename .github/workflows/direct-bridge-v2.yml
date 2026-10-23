@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - direct-bridge-v2-no-npm
+      - cloud-bridge-forge
   pull_request:
     branches:
       - main
