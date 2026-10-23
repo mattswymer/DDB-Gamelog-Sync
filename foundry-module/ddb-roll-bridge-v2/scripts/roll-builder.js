@@ -47,6 +47,9 @@ export function buildRecordedRoll(rollData) {
     if (terms.length) terms.push(new foundry.dice.terms.OperatorTerm({ operator: constant < 0 ? "-" : "+" }));
     terms.push(new foundry.dice.terms.NumericTerm({ number: Math.abs(constant) }));
   }
+  // Roll.fromTerms requires every term to have the same evaluation state.
+  // The dice above contain recorded results, so mark operators/constants evaluated too.
+  for (const term of terms) term._evaluated = true;
   const roll = Roll.fromTerms(terms);
   if (Number.isFinite(rollData.total)) roll._total = rollData.total;
   else roll._total = null;
