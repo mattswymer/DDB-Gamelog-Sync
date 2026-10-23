@@ -365,8 +365,11 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
   if (!allowedOrigin(req.headers.origin || "")) return send(res, 403, { error: "Origin not allowed. Set ALLOWED_ORIGINS if your Foundry host uses a custom domain." });
-  if (process.env.REQUIRE_HTTPS === "true" && String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() !== "https") {\n    return send(res, 426, { error: "HTTPS is required for this hosted bridge." });\n  }
-\n  if (url.pathname === "/health" && req.method === "GET") {
+  if (process.env.REQUIRE_HTTPS === "true" && String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() !== "https") {
+    return send(res, 426, { error: "HTTPS is required for this hosted bridge." });
+  }
+
+  if (url.pathname === "/health" && req.method === "GET") {
     return send(res, 200, { ok: true, service: "ddb-foundry-direct-bridge", state, version: "0.1.0" });
   }
   if (url.pathname === "/events" && req.method === "GET") {
