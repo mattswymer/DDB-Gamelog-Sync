@@ -2,7 +2,7 @@ import http from "node:http";
 import crypto from "node:crypto";
 import WebSocket from "ws";
 
-const HOST = "127.0.0.1";
+const HOST = process.env.HOST || "127.0.0.1";
 const PORT = Number(process.env.PORT || 39210);
 const WS_BASE = "wss://game-log-api-live.dndbeyond.com/v1";
 const REST_MESSAGES = "https://game-log-rest-live.dndbeyond.com/v1/getmessages";
@@ -13,7 +13,11 @@ const REFRESH_LEAD_MS = 40000;
 const HEARTBEAT_MS = 25000;
 const HEALTHY_AFTER_MS = 15000;
 const MAX_SEEN = 3000;
-const accessToken = crypto.randomBytes(32).toString("hex");
+const configuredAccessToken = String(process.env.BRIDGE_ACCESS_TOKEN || "").trim();
+if (configuredAccessToken && configuredAccessToken.length < 48) throw new Error("BRIDGE_ACCESS_TOKEN must be at least 48 characters.");
+const accessToken = configuredAccessToken || crypto.randomBytes(32).toString("hex");
+const streamTickets = new Map();
+const STREAM_TICKET_TTL_MS = 60_000;
 const allowedExtraOrigins = (process.env.ALLOWED_ORIGINS || "").split(",").map(s => s.trim()).filter(Boolean);
 
 let config = null;
@@ -60,10 +64,23 @@ function send(res, status, body) {
   res.end(JSON.stringify(body));
 }
 
-function authorized(req, url) {
-  const header = String(req.headers.authorization || "");
-  const queryToken = url.searchParams.get("token") || "";
-  return header === `Bearer ${accessToken}` || queryToken === accessToken;
+function authorized(req) {
+  return String(req.headers.authorization || "") === `Bearer ${accessToken}`;
+}
+
+function createStreamTicket() {
+  const now = Date.now();
+  for (const [ticket, expiresAt] of streamTickets) if (expiresAt <= now) streamTickets.delete(ticket);
+  const ticket = crypto.randomBytes(32).toString("hex");
+  streamTickets.set(ticket, now + STREAM_TICKET_TTL_MS);
+  return ticket;
+}
+
+function consumeStreamTicket(ticket) {
+  const key = String(ticket || "");
+  const expiresAt = streamTickets.get(key);
+  streamTickets.delete(key);
+  return Number(expiresAt) > Date.now();
 }
 
 async function readJson(req) {
@@ -348,13 +365,33 @@ const server = http.createServer(async (req, res) => {
     return res.end();
   }
   if (!allowedOrigin(req.headers.origin || "")) return send(res, 403, { error: "Origin not allowed. Set ALLOWED_ORIGINS if your Foundry host uses a custom domain." });
+  if (process.env.REQUIRE_HTTPS === "true" && String(req.headers["x-forwarded-proto"] || "").split(",")[0].trim() !== "https") {
+    return send(res, 426, { error: "HTTPS is required for this hosted bridge." });
+  }
 
   if (url.pathname === "/health" && req.method === "GET") {
     return send(res, 200, { ok: true, service: "ddb-foundry-direct-bridge", state, version: "0.1.0" });
   }
-  if (!authorized(req, url)) return send(res, 401, { error: "Unauthorized local bridge request." });
+  if (url.pathname === "/events" && req.method === "GET") {
+    if (!consumeStreamTicket(url.searchParams.get("ticket"))) return send(res, 401, { error: "Missing, expired, or already used stream ticket." });
+    res.writeHead(200, {
+      "Content-Type": "text/event-stream; charset=utf-8",
+      "Cache-Control": "no-cache, no-store",
+      "Connection": "keep-alive",
+      "X-Accel-Buffering": "no"
+    });
+    res.write(`event: status\ndata: ${JSON.stringify({ state, failures, lastError, gameId: config?.gameId || "" })}\n\n`);
+    clients.add(res);
+    const heartbeat = setInterval(() => { try { res.write(": keepalive\n\n"); } catch {} }, 20000);
+    req.on("close", () => { clearInterval(heartbeat); clients.delete(res); });
+    return;
+  }
+  if (!authorized(req)) return send(res, 401, { error: "Unauthorized bridge request." });
 
   try {
+    if (url.pathname === "/stream-ticket" && req.method === "POST") {
+      return send(res, 200, { ok: true, ticket: createStreamTicket(), expiresInMs: STREAM_TICKET_TTL_MS });
+    }
     if (url.pathname === "/configure" && req.method === "POST") {
       const body = await readJson(req);
       const gameId = String(body.gameId || "").trim();
@@ -380,19 +417,6 @@ const server = http.createServer(async (req, res) => {
     if (url.pathname === "/characters" && req.method === "GET") {
       return send(res, 200, { ok: true, characters: await listCharacters() });
     }
-    if (url.pathname === "/events" && req.method === "GET") {
-      res.writeHead(200, {
-        "Content-Type": "text/event-stream; charset=utf-8",
-        "Cache-Control": "no-cache, no-store",
-        "Connection": "keep-alive",
-        "X-Accel-Buffering": "no"
-      });
-      res.write(`event: status\ndata: ${JSON.stringify({ state, failures, lastError, gameId: config?.gameId || "" })}\n\n`);
-      clients.add(res);
-      const heartbeat = setInterval(() => { try { res.write(": keepalive\n\n"); } catch {} }, 20000);
-      req.on("close", () => { clearInterval(heartbeat); clients.delete(res); });
-      return;
-    }
     return send(res, 404, { error: "Not found." });
   } catch (error) {
     return send(res, 400, { error: String(error?.message || error) });
@@ -401,7 +425,7 @@ const server = http.createServer(async (req, res) => {
 
 server.listen(PORT, HOST, () => {
   log(`Listening only on http://${HOST}:${PORT}`);
-  log(`Bridge access token (paste into the Foundry module once per server run): ${accessToken}`);
+  if (configuredAccessToken) log("Using BRIDGE_ACCESS_TOKEN from host environment; value is not logged.");\n  else log(`Bridge access token (paste into the Foundry module once per server run): ${accessToken}`);
   log("The CobaltSession cookie is held in memory only and is never written to disk or printed.");
   log("If using a custom Foundry domain, set ALLOWED_ORIGINS to a comma-separated list of exact origins.");
 });
